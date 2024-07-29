@@ -1,13 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Loader from "../components/Loader";
+import { Response, Say, Dial } from "react-twiml";
 const Main = () => {
   const navigate = useNavigate();
   const [number, setNumber] = useState("");
   const [sid, setSid] = useState("");
   const [zipCode, setZipCode] = useState("");
   const [zipCodeError, setZipCodeError] = useState("");
-  const [activeCalls, setActiveCalls] = useState([]);
+  const [activeCalls, setActiveCalls] = useState([
+    // { from_formatted: "from1", sid: "sid1" },
+    // {
+    //   from_formatted: "from2",
+    //   sid: "sid2",
+    // },
+  ]);
   const [loader, setLoader] = useState(false);
 
   useEffect(() => {
@@ -15,7 +22,12 @@ const Main = () => {
     if (!isLogin) {
       navigate("/login");
     } else {
-      getStatus();
+      getStatus(true);
+      // function with 1s interval that keeps checking Twilio API for an active call.
+      // const interval = setInterval(() => {
+      //   getStatus(false);
+      // }, 1000);
+      // return () => clearInterval(interval);
     }
   }, []);
 
@@ -31,17 +43,10 @@ const Main = () => {
     navigate("/login");
   };
 
-  const transferCall = (e) => {
-    e.preventDefault();
-    if (zipCode) {
-      console.log("zipcode", zipCode, "number", number, "sid", sid);
-    } else {
-      setZipCodeError("Zip code is required");
+  const getStatus = (showLoader) => {
+    if (showLoader) {
+      setLoader(true);
     }
-  };
-
-  const getStatus = () => {
-    setLoader(true);
     const myHeaders = new Headers();
     myHeaders.append(
       "Authorization",
@@ -63,7 +68,9 @@ const Main = () => {
         console.log(result);
         setLoader(false);
         if (result.calls) {
-          setActiveCalls(result.calls);
+          setActiveCalls(
+            result.calls?.filter((call) => call.direction == "inbound")
+          );
           // setNumber(result.calls[0]?.from_formatted);
           // setSid(result.calls[0]?.sid);
         }
@@ -73,6 +80,7 @@ const Main = () => {
         setLoader(false);
       });
   };
+
   const setNumberAndSid = (e) => {
     const index = e.target.selectedIndex;
     const el = e.target.childNodes[index];
@@ -81,6 +89,39 @@ const Main = () => {
     console.log(number, id);
     setNumber(number);
     setSid(id);
+  };
+
+  const transferCall = (e) => {
+    e.preventDefault();
+    if (zipCode) {
+      console.log("zipcode", zipCode, "number", number, "sid", sid);
+      const myHeaders = new Headers();
+      myHeaders.append(
+        "Authorization",
+        `Basic ${window.btoa(
+          `${process.env.REACT_APP_TWILIO_SID}:${process.env.REACT_APP_TWILIO_TOKEN}`
+        )}`
+      );
+      const requestOptions = {
+        method: "GET",
+        headers: myHeaders,
+        redirect: "follow",
+      };
+      fetch(
+        `https://api.twilio.com/2010-04-01/Accounts/${process.env.REACT_APP_TWILIO_SID}/Calls/${sid}.json`,
+        requestOptions
+      )
+        .then((response) => response.json())
+        .then((result) => {
+          console.log(result);
+          // <Response><Dial>${your_predefined_number}</Dial></Response>
+        })
+        .catch((error) => {
+          console.error(error);
+        });
+    } else {
+      setZipCodeError("Zip code is required");
+    }
   };
   return (
     <>
